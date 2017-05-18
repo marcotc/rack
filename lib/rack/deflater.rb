@@ -65,6 +65,38 @@ module Rack
       end
     end
 
+    class BrotliStream
+      def initialize(body, mtime)
+        @body = body
+        @mtime = mtime
+        @closed = false
+      end
+
+      def each(&block)
+        @writer = block
+        gzip = Brotli.deflate(self)
+        gzip.mtime = @mtime
+        Brotli.deflate(@body)
+        @body.each { |part|
+          gzip.write(part)
+          gzip.flush
+        }
+      ensure
+        gzip.close
+        @writer = nil
+      end
+
+      def write(data)
+        @writer.call(data)
+      end
+
+      def close
+        return if @closed
+        @closed = true
+        @body.close if @body.respond_to?(:close)
+      end
+    end
+    
     class GzipStream
       def initialize(body, mtime)
         @body = body
